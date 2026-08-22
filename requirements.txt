@@ -3,3 +3,4 @@ pandas
 python-dotenv
 pillow-heif
 streamlit
+certifi

@@ -40,9 +40,16 @@ implementations of the core learning functions.**
      choice) ahead of the base64 encode, not just a straight file read.
 2. Single currency (THB) for the PoC.
 3. "User name" = the **payer's** name on the receiving notification, not the
-   shop's own account name.
-4. Local single-user app for now — a basic Streamlit UI for upload and
-   review, but no auth, no multi-user, no hosted server yet.
+   shop's own account name. The shop's own receiving account (name, bank,
+   masked account) is captured separately as `recipient_*` fields — useful
+   for reconciliation when a shop has more than one receiving account, but
+   optional since not every slip shows it as clearly as the payer side.
+4. Deployed live (Streamlit Community Cloud) behind a lightweight
+   username/password gate for a small, known set of people — a plain
+   `[app_credentials]` table in Streamlit secrets, no signup flow, no
+   database. Real user accounts (Supabase Auth is the natural fit, since
+   Supabase is already the Phase 2 storage pick) are a later step, only
+   worth it once this grows past a handful of named users.
 
 ## Non-goals for this phase
 - Scanned invoices/receipts (Phase 2+)
@@ -107,13 +114,20 @@ class PaymentRecord:
     payer_name: str | None
     payer_bank: str | None
     payer_account_last_digits: str | None
+    recipient_name: str | None        # the shop's own name as shown on the slip
+    recipient_bank: str | None
+    recipient_account_last_digits: str | None
     reference_number: str | None
     extraction_confidence: str       # "high" | "low" | "needs_review"
     notes: str | None                # anything Claude flagged as uncertain
     shop_id: str | None = None       # forward-compat placeholder for the future multi-shop/SaaS phase
+    transaction_type: str | None = None  # "DEBIT" (pay-out) | "RECEIPT" (pay-in) | None (unclassified)
 ```
 This should map close to 1:1 onto the extraction tool's JSON schema, so
 turning a `tool_use` block back into a `PaymentRecord` is mostly plumbing.
+`transaction_type` is the one exception — it's not extracted by Claude, it's
+set by the user in the review UI (bulk row-select in the table, then a
+DEBIT/RECEIPT button), so people can tell pay-ins from pay-outs at a glance.
 
 ## Scaffold vs. stub
 

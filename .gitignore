@@ -1,5 +1,6 @@
 # Environment
 .env
+.streamlit/secrets.toml
 
 # Real payment data — never commit
 sample_images/*
@@ -16,3 +17,8 @@ venv/
 
 # OS
 .DS_Store
+
+# Claude Code local settings + skill symlinks into the local .venv
+# (machine-specific, not project config)
+.claude/
+.agents/
