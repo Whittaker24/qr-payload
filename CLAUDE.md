@@ -93,9 +93,14 @@ qr-payment-tracker/
 ├── app.py                # Streamlit UI — upload, table, CSV download
 ├── sample_images/        # gitignored except .gitkeep — test slips go here
 ├── output/               # gitignored — CSV exports land here
+├── tests/                # pytest suite (no network / API key needed)
+├── docs/                 # ARCHITECTURE.md, DEVELOPMENT.md, LINE_INTEGRATION.md
+├── pyproject.toml        # ruff + pytest config
+├── .pre-commit-config.yaml
 └── src/
     ├── __init__.py
-    ├── schema.py         # PaymentRecord + the extraction tool's JSON schema
+    ├── config.py         # model ID, pricing label, account-digit limit
+    ├── schema.py         # PaymentRecord, extraction tool schema, build_record()
     ├── image_loader.py   # find + base64-encode images
     ├── extractor.py      # Claude vision + tool-use call, one per image
     ├── token_tracker.py  # accumulates usage across calls

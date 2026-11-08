@@ -10,6 +10,15 @@ records in memory for the session (no database), and is gated by a
 lightweight shared-credentials login rather than real user accounts. See
 `CLAUDE.md` for the full project plan.
 
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | User flow, module responsibilities, data model, design rules |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Dev setup, linting, tests, pre-commit hooks, conventions |
+| [`docs/LINE_INTEGRATION.md`](docs/LINE_INTEGRATION.md) | Research: sending slips via a LINE Official Account (feasibility, law, plan) |
+| [`CLAUDE.md`](CLAUDE.md) | Project brief and working agreement |
+
 ## Setup
 
 1. **Create a virtual environment and install dependencies:**
@@ -63,15 +72,17 @@ This opens the app in your browser (usually `http://localhost:8501`).
    table — check those before trusting the export. Select rows and use the
    **Mark selected as DEBIT/RECEIPT** buttons to classify pay-outs vs.
    pay-ins.
-6. Click **Download CSV** to export the current table. Exports also land in
-   `output/ledger.csv` on disk.
+6. Click **Download CSV** to export the current table. The file is built in
+   memory and sent to your browser — nothing is written to the server's
+   disk. It opens correctly in Excel, including Thai text.
 7. The **Token usage** panel at the bottom shows API call count, total
    input/output tokens, and an estimated cost (pulled from Anthropic's
    current published pricing, not hardcoded).
 
 Records only persist for the browser session — refreshing the page clears
 the table. Re-uploading the same image won't reprocess it or spend extra
-tokens as long as the session state hasn't been cleared.
+tokens as long as the session state hasn't been cleared. A file that fails
+to process isn't marked as done, so you can re-upload it to retry.
 
 ## Deploying
 
@@ -101,20 +112,37 @@ Supabase is already the Phase 2 storage pick).
 ```
 ├── app.py                # Streamlit UI — the only file that touches the CLI/UI layer
 ├── sample_images/        # Drop test slips here (gitignored except .gitkeep)
-├── output/                # CSV exports land here (gitignored except .gitkeep)
+├── output/                # Local CSV exports (gitignored except .gitkeep)
+├── tests/                 # pytest suite — no network or API key needed
+├── docs/                  # Architecture, development and LINE research docs
+├── pyproject.toml         # ruff + pytest config
+├── .pre-commit-config.yaml
 └── src/
-    ├── schema.py          # PaymentRecord dataclass + the extraction tool's JSON schema
+    ├── config.py          # Model ID, pricing label, account-digit limit
+    ├── schema.py          # PaymentRecord, extraction tool schema, build_record()
     ├── image_loader.py    # Find + base64-encode images (HEIC → PNG conversion)
     ├── extractor.py       # Claude vision + tool-use call, one per image
     ├── token_tracker.py   # Accumulates token usage + estimates cost
     └── storage.py         # Records → DataFrame → CSV
 ```
 
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+pre-commit install      # lint, format and test on every commit
+pytest                  # run the tests
+ruff check . && ruff format .
+```
+
+See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for details.
+
 ## Notes
 
 - Currency is fixed to THB for this PoC.
-- Only the last few digits of any payer/recipient account number are ever
-  stored — never store a full account number.
+- Only the last four digits of any payer/recipient account number are ever
+  stored — enforced in code by `build_record()`, not just requested in the
+  prompt.
 - `.env`, `.streamlit/secrets.toml`, and anything you drop in
   `sample_images/`/`output/` are gitignored since they can contain real
   bank details or credentials.
