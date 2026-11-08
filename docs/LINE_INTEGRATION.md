@@ -11,7 +11,7 @@ Status: research only, written 2026-11-08. **Not legal advice.** No code was wri
 **Blockers found: none absolute. Four things need a decision or a lawyer before real shop data flows:**
 
 1. **LINE User Data Policy storage limit.** It says Friend and Group information may not be kept beyond 24 hours, and other LINE User Information must be disclosed to users if stored more than 24 hours. A persistent `userId/groupId -> shop_id` table could collide with this. Whether `userId`/`groupId`/image content is "LINE User Information" under that policy is **UNVERIFIED**. Needs confirmation from LINE or a lawyer.
-2. **PDPA.** Slips contain third-party (payer) personal data. Thailand's PDPA applies; you would likely be a data processor for the shop (controller), which needs a written data-processing agreement, and sending images to Anthropic (US) is a cross-border transfer needing a safeguard mechanism. See section 5.
+2. **PDPA.** Slips contain third-party (payer) personal data. Thailand's PDPA applies; you would likely be a data processor for the shop (controller), which needs a written data-processing agreement, and sending images to Anthropic (US) is a cross-border transfer needing a safeguard mechanism. See section 5. Local OCR instead of Claude would remove that transfer but not the other PDPA duties: see section 5a.
 3. **Architecture shift.** The webhook cannot live in Streamlit. You need a small always-on HTTPS backend. That is new work, but `src/` is already reusable.
 4. **LINE image retention is limited** ("automatically deleted after a period of time", length **UNVERIFIED**), so the backend must download immediately. It also means LINE is not your archive.
 
@@ -166,6 +166,36 @@ Reminder: research summary, not legal advice. Many links below are law-firm or v
 | **Third-party data: payers** | Payers' names and partial accounts are in the image but they are neither shop users nor LINE users in this flow. PDPA still applies to their data. | They cannot give consent in practice; they exercise rights via the shop. | Data minimisation: extract only the fields in `PaymentRecord`; no memo field; no full account numbers; hide or avoid showing payer data in LINE reply cards in group chats (anyone in the group sees the card). |
 | **Monetisation / digital platform rules** | Royal Decree on Digital Platform Services B.E. 2565 (effective Aug 2023): platform operators notify ETDA; foreign operators serving Thai users (Thai-language content, THB payment) can be deemed operating in Thailand and must appoint a contact person. Scope is intermediary platforms; a pure SaaS may be out of scope but not verified. [src: DSB, OneAsia, LawPlus] | If paid SaaS, check applicability. DBD e-commerce registration and VAT on SaaS were not researched. | UNVERIFIED. Lawyer to confirm; also consumer-protection, invoicing/VAT, and ToS for B2B. |
 
+### 5a. Does avoiding AI help legally? AI extraction vs local OCR
+
+Context: extraction could use Claude (images sent to Anthropic's API) or a local OCR pipeline (e.g. Tesseract/PaddleOCR with rule-based parsing, running on our own server, no image leaving our infrastructure). This is the author's analysis of the rows above, not a sourced legal finding.
+
+**Short answer: local OCR shrinks the legal footprint but removes none of the core obligations.** The PDPA applies to payer data however it is read.
+
+| Legal topic | Claude (Anthropic API) | Local OCR | Difference |
+|---|---|---|---|
+| PDPA applies; lawful basis; payer notice | Yes | Yes | **None** |
+| Controller/processor agreement with each shop | Needed; must also cover Anthropic as a sub-processor | Needed; one fewer party to name | Smaller |
+| Cross-border transfer of slip images | Yes: images go to Anthropic (US location UNVERIFIED), so SCCs or another mechanism are needed | None for extraction (storage and LINE transfers remain) | **Largest gain** |
+| Third-party retention of images | Up to 30 days at Anthropic by default; zero retention (ZDR) by arrangement and model-dependent | None | Removed |
+| LINE terms limiting disclosure to third parties / AI | Possible friction (LINE OA API terms, User Data Policy "contractor" clause) | Smaller question: content stays with us | Smaller |
+| LINE 24-hour Friend/Group data rule | Applies | Applies | **None** |
+| Security duties, breach notification (72 h) | Applies, plus Anthropic's incident duties | Applies; entire attack surface is ours | **None** (responsibility shifts to us) |
+| Retention (accounting 5-7 yrs; keep image or not) | Applies | Applies | **None** |
+| Bank-secrecy / licensing question | Same open question | Same open question | **None** |
+| AI-specific Thai rules | None found in these sources; draft AI legislation status UNVERIFIED | Not applicable | Possible future difference |
+
+**Trade-offs beyond the law**
+- **Accuracy**: OCR on clean digital screenshots can be good; on scanned or photographed slips (skewed, blurry, poor light) and Thai text it is noticeably worse, and each bank layout needs its own parsing rules. Wrong values land in tax records, so errors have a cost too.
+- **Responsibility**: self-hosting means the server, patching and breach exposure are all ours, which is a security duty under Section 37 rather than a vendor's.
+- **A privacy-minimising middle path**: Claude with ZDR, only the slip image sent (never shop or user details), no memo extraction, region/sub-processor list reviewed. A hybrid (OCR first, Claude only for slips that fail validation) halves the number of images leaving our infrastructure but does not remove the transfer question for those that do.
+
+**Recommendation (for now)**
+1. Keep Claude for the pilot. Do not redesign around a legal concern a lawyer has not confirmed.
+2. Get the lawyer's answer to question 11 below. If a US API with a signed DPA/SCCs and ZDR is acceptable, the legal case for dropping AI largely disappears.
+3. If not acceptable, move to local OCR or the hybrid. `extract_from_image()` already takes an image and returns plain fields, so an OCR extractor can sit beside it without changing the rest of the app.
+4. Either way: minimise (only needed fields, no full account numbers, no memo), keep the original image bytes and a hash, and write the sub-processor list into the shop agreement.
+
 ---
 
 ## 6. Risks and open questions
@@ -190,6 +220,7 @@ Reminder: research summary, not legal advice. Many links below are law-firm or v
 8. Must we retain original slip images for the Accounting Act / Revenue Code period, or is the structured ledger enough? Is a screenshot via LINE an acceptable supporting document, and under the Electronic Transactions Act what integrity measures are expected?
 9. If we charge subscriptions: ETDA digital platform notification, DBD registration, VAT, consumer-protection or B2B terms?
 10. What breach-notification duties apply to us as a processor, and what contract timeline should we promise shops?
+11. Does using a US-based AI provider for extraction (commercial API terms, zero data retention if available, SCCs/DPA in place) satisfy the PDPA cross-border and processor rules for our setup, or must extraction stay on infrastructure we control (local OCR)? Does Thailand have, or is it about to introduce, any AI-specific rule that changes this?
 
 ---
 
