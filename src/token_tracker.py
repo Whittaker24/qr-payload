@@ -10,10 +10,11 @@ from urllib.request import Request, urlopen
 import certifi
 from anthropic.types import Usage
 
-# Live published rates for extractor.MODEL ("claude-sonnet-5").
+from src.config import PRICING_MODEL_LABEL
+
+# Live published rates for config.MODEL (labelled PRICING_MODEL_LABEL in the table).
 # .md gives the docs as plain text so we can parse them without scraping HTML.
 PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing.md"
-PRICING_MODEL_LABEL = "Claude Sonnet 5"
 TOKENS_PER_MTOK = 1_000_000
 
 # The standard pricing table's header row. Anchoring on this (rather than
@@ -21,7 +22,7 @@ TOKENS_PER_MTOK = 1_000_000
 # page also has a separate Batch API table further down with the same
 # model name at half the price — without this anchor, a page reorg could
 # make us silently match the wrong table.
-_PRICING_TABLE_HEADER = re.compile(r"\|\s*Model\s*\|.*Output Tokens.*\|")
+_PRICING_TABLE_HEADER = re.compile(r"\|\s*Model\s*\|.*Output Tokens.*\|", re.IGNORECASE)
 
 
 class PricingUnavailableError(RuntimeError):
@@ -43,14 +44,22 @@ def _published_rates_usd_per_mtok() -> tuple[float, float]:
     PricingUnavailableError (never a raw urllib/parsing exception) so
     callers have one exception type to handle.
     """
+    return _parse_rates(_fetch_pricing_page())
+
+
+def _fetch_pricing_page() -> str:
+    """Download the pricing page as markdown text."""
     request = Request(PRICING_URL, headers={"User-Agent": "qr-payment-tracker/0.1"})
     try:
         context = ssl.create_default_context(cafile=certifi.where())
         with urlopen(request, timeout=10, context=context) as response:
-            page = response.read().decode("utf-8")
+            return response.read().decode("utf-8")
     except (URLError, TimeoutError, OSError) as exc:
         raise PricingUnavailableError(f"Could not reach {PRICING_URL}: {exc}") from exc
 
+
+def _parse_rates(page: str) -> tuple[float, float]:
+    """Extract (input, output) USD per MTok for PRICING_MODEL_LABEL from the pricing markdown."""
     # Scope the row search to the standard pricing table only — start
     # right after its header row and stop at the first blank line (the
     # table's end), so the Batch API table can't be matched by mistake.

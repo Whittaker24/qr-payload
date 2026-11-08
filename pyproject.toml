@@ -1,0 +1,23 @@
+[project]
+name = "qr-payment-ledger"
+version = "0.1.0"
+description = "Extract structured data from QR payment slips with Claude vision + tool use"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+# E/W pycodestyle, F pyflakes, I isort, B bugbear, UP pyupgrade, SIM simplify
+select = ["E", "W", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Long human-readable description strings in the tool's JSON schema.
+"src/schema.py" = ["E501"]
+# Pasted markdown table fixtures.
+"tests/test_token_tracker.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

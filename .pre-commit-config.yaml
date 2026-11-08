@@ -1,0 +1,28 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.4
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+      - id: check-yaml
+  - repo: local
+    hooks:
+      # Real bank data must never be committed (see CLAUDE.md > Security)
+      - id: no-slip-images
+        name: block slip images / ledger exports
+        entry: "Refusing to commit sample_images/ or output/ data"
+        language: fail
+        files: ^(sample_images|output)/(?!\.gitkeep$)
+      - id: pytest
+        name: pytest
+        entry: .venv/bin/python -m pytest -q
+        language: system
+        pass_filenames: false
+        always_run: true

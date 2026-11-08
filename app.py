@@ -19,13 +19,12 @@ from streamlit.errors import StreamlitSecretNotFoundError
 
 from src.extractor import extract_from_image
 from src.image_loader import SUPPORTED_EXTENSIONS
-from src.schema import EXTRACTION_TOOL, PaymentRecord
-from src.storage import export_csv, to_dataframe
+from src.schema import EXTRACTION_TOOL, build_record
+from src.storage import to_csv_bytes, to_dataframe
 from src.token_tracker import TokenTracker
 
 load_dotenv()
 
-OUTPUT_CSV_PATH = Path("output") / "ledger.csv"
 FLAGGED_CONFIDENCE_LEVELS = {"low", "needs_review"}
 
 
@@ -33,32 +32,6 @@ def _file_key(uploaded_file) -> str:
     """Stable key for an uploaded file so a Streamlit rerun doesn't reprocess it."""
     digest = hashlib.md5(uploaded_file.getvalue()).hexdigest()
     return f"{uploaded_file.name}:{uploaded_file.size}:{digest}"
-
-
-def _build_record(filename: str, fields: dict) -> PaymentRecord:
-    """Combine an extraction tool's output with the source filename.
-
-    Uses .get() for everything but source_filename since `fields` comes
-    from the model's tool call — an external boundary — and the schema
-    only marks a few fields required; anything else can legitimately be
-    absent rather than present-but-null.
-    """
-    return PaymentRecord(
-        source_filename=filename,
-        transaction_date=fields.get("transaction_date"),
-        transaction_time=fields.get("transaction_time"),
-        amount=fields.get("amount"),
-        currency=fields.get("currency", "THB"),
-        payer_name=fields.get("payer_name"),
-        payer_bank=fields.get("payer_bank"),
-        payer_account_last_digits=fields.get("payer_account_last_digits"),
-        recipient_name=fields.get("recipient_name"),
-        recipient_bank=fields.get("recipient_bank"),
-        recipient_account_last_digits=fields.get("recipient_account_last_digits"),
-        reference_number=fields.get("reference_number"),
-        extraction_confidence=fields.get("extraction_confidence", "needs_review"),
-        notes=fields.get("notes"),
-    )
 
 
 def _get_credentials() -> dict[str, str]:
@@ -128,12 +101,10 @@ st.caption(
     "exportable table for tax record-keeping."
 )
 
-if "records" not in st.session_state:
-    st.session_state.records = []
-if "processed_file_keys" not in st.session_state:
-    st.session_state.processed_file_keys = set()
-if "tracker" not in st.session_state:
-    st.session_state.tracker = TokenTracker()
+# Session state is per browser session and is lost on refresh (no database in Phase 1).
+st.session_state.setdefault("records", [])
+st.session_state.setdefault("processed_file_keys", set())
+st.session_state.setdefault("tracker", TokenTracker())
 
 try:
     client = Anthropic()
@@ -151,11 +122,7 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
-    new_files = [
-        uploaded_file
-        for uploaded_file in uploaded_files
-        if _file_key(uploaded_file) not in st.session_state.processed_file_keys
-    ]
+    new_files = [f for f in uploaded_files if _file_key(f) not in st.session_state.processed_file_keys]
     if new_files:
         progress = st.progress(0.0, text="Extracting payment details...")
         for i, uploaded_file in enumerate(new_files):
@@ -166,12 +133,14 @@ if uploaded_files:
             try:
                 fields, usage = extract_from_image(client, tmp_path, EXTRACTION_TOOL)
                 st.session_state.tracker.record(usage)
-                st.session_state.records.append(_build_record(uploaded_file.name, fields))
+                st.session_state.records.append(build_record(uploaded_file.name, fields))
+                # Only mark processed on success so a failed file can be retried
+                # by removing and re-uploading it.
+                st.session_state.processed_file_keys.add(_file_key(uploaded_file))
             except Exception as exc:
                 st.error(f"Failed to process {uploaded_file.name}: {exc}")
             finally:
                 tmp_path.unlink(missing_ok=True)
-            st.session_state.processed_file_keys.add(_file_key(uploaded_file))
             progress.progress((i + 1) / len(new_files), text=f"Processed {uploaded_file.name}")
         progress.empty()
 
@@ -186,8 +155,8 @@ if st.session_state.records:
         st.warning(f"{flagged.sum()} record(s) need review before exporting: {flagged_names}")
 
     def _highlight_flagged(row: pd.Series) -> list[str]:
-        style = "background-color: #fff3cd" if row["extraction_confidence"] in FLAGGED_CONFIDENCE_LEVELS else ""
-        return [style] * len(row)
+        is_flagged = row["extraction_confidence"] in FLAGGED_CONFIDENCE_LEVELS
+        return ["background-color: #fff3cd" if is_flagged else ""] * len(row)
 
     selection = st.dataframe(
         df.style.apply(_highlight_flagged, axis=1),
@@ -219,10 +188,9 @@ if st.session_state.records:
                 st.session_state.records[row].transaction_type = "RECEIPT"
             st.rerun()
 
-    csv_path = export_csv(df, OUTPUT_CSV_PATH)
     st.download_button(
         "Download CSV",
-        data=csv_path.read_bytes(),
+        data=to_csv_bytes(df),
         file_name="ledger.csv",
         mime="text/csv",
     )

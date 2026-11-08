@@ -39,3 +39,14 @@ def export_csv(df: pd.DataFrame, output_path: str | Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
     return output_path
+
+
+def to_csv_bytes(df: pd.DataFrame) -> bytes:
+    """Serialise a DataFrame to CSV bytes without touching disk.
+
+    Encoded as UTF-8 with a BOM so Excel displays Thai text correctly.
+
+    Preferred for downloads: on a shared host a fixed output path would be
+    overwritten between users and leave bank data on the server's disk.
+    """
+    return df.to_csv(index=False).encode("utf-8-sig")

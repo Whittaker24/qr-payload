@@ -6,9 +6,8 @@ from typing import Any
 from anthropic import Anthropic
 from anthropic.types import Usage
 
+from src.config import MODEL
 from src.image_loader import encode_image
-
-MODEL = "claude-sonnet-5"
 
 
 def extract_from_image(
@@ -73,4 +72,6 @@ def extract_from_image(
         if block.type == "tool_use":
             return block.input, response.usage
 
+    if response.stop_reason == "max_tokens":
+        raise ValueError("Response was cut off (max_tokens) before the extraction finished")
     raise ValueError("Claude response contained no tool_use block")
