@@ -15,6 +15,7 @@ lightweight shared-credentials login rather than real user accounts. See
 | Doc | What's in it |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | User flow, module responsibilities, data model, design rules |
+| [`docs/CODE_WALKTHROUGH.md`](docs/CODE_WALKTHROUGH.md) | File-by-file walkthrough: run order of `app.py`, the extraction call, `build_record`, tests and hooks |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Dev setup, linting, tests, pre-commit hooks, conventions |
 | [`docs/LINE_INTEGRATION.md`](docs/LINE_INTEGRATION.md) | Research: sending slips via a LINE Official Account (feasibility, law, plan) |
 | [`CLAUDE.md`](CLAUDE.md) | Project brief and working agreement |
